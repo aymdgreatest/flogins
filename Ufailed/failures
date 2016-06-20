@@ -1,0 +1,67 @@
+#!/bin/bash
+#################################################
+# Title: failures				#
+# Author: Rolando R. Gabriana 			#
+# Version: 0					#
+# Date: 2.19.2016				#
+#################################################
+# Purpose: The Purpose of this script is to \	#
+# check the for failed logins and create a list.#
+# The list is then used to block offending hosts#
+#################################################
+
+## Environment ##
+
+src=/opt/Ufailed
+fail=$src/ipblocks.txt
+result=$src/failed_attempts.txt
+
+## Execute ##
+
+mkdir -p $src # create the directory
+
+a=$(mktemp)
+
+if [ -f $fail ]; then # check if the file exists
+
+  sort -nr $fail > $a # sort the entries
+  cp $a $fail
+  rm -f $a
+  else
+    touch $fail
+fi
+
+# BlackList
+# look for failed password/invalid user logins.
+
+grep -i -e "failed.*password\|failed.*user" $1 | grep -v sudo: | rev | cut -d " " -f4 | rev | sort | uniq -c | awk '$1 >= 3' | awk '{print $2}' > $result
+
+# Compare new results with current list
+
+nlist=$src/nlist.txt
+subject="Failed Login Reports From Production"
+recipient=devops@enlightedinc.com
+
+grep -vwFf $fail $result > $nlist
+
+  if [ -s $nlist ]; then
+    cat $nlist >> $fail
+    cat $nlist | mailx -s "$subject" $recipient
+    else
+     echo "`date`: No new entries"
+     exit 1
+  fi
+
+tmpfile=$(mktemp)
+
+awk 'NF' $fail > $tmpfile
+
+cp -u $tmpfile $fail
+
+echo -en "\n" >> $fail # Add a blank line to the end of the list
+
+echo "`date` Successful Run!" # This is added for logging purposes.
+
+rm -f $tmpfile
+
+exit 0
